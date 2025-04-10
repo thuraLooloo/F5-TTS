@@ -13,6 +13,7 @@ from tqdm import tqdm
 from f5_tts.model.modules import MelSpec
 from f5_tts.model.utils import default
 
+from datasets import load_dataset
 
 class HFDataset(Dataset):
     def __init__(
@@ -72,6 +73,71 @@ class HFDataset(Dataset):
         mel_spec = mel_spec.squeeze(0)  # '1 d t -> d t'
 
         text = row["text"]
+
+        return dict(
+            mel_spec=mel_spec,
+            text=text,
+        )
+
+class OurDataset(HFDataset):
+    def __init__(
+        self,
+        hf_dataset: Dataset,
+        target_sample_rate=24_000,
+        n_mel_channels=100,
+        hop_length=256,
+        n_fft=1024,
+        win_length=1024,
+        mel_spec_type="vocos",
+    ):
+        super().__init__()
+        self.data = hf_dataset
+        self.target_sample_rate = target_sample_rate
+        self.hop_length = hop_length
+
+        self.mel_spectrogram = MelSpec(
+            n_fft=n_fft,
+            hop_length=hop_length,
+            win_length=win_length,
+            n_mel_channels=n_mel_channels,
+            target_sample_rate=target_sample_rate,
+            mel_spec_type=mel_spec_type,
+        )
+
+    def get_frame_len(self, index):
+        row = self.data[index]
+        audio = row["audio"]["array"]
+        sample_rate = row["audio"]["sampling_rate"]
+        return audio.shape[-1] / sample_rate * self.target_sample_rate / self.hop_length
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        row = self.data[index]
+        audio = row["audio"]["array"]
+
+        # logger.info(f"Audio shape: {audio.shape}")
+
+        sample_rate = row["audio"]["sampling_rate"]
+        duration = audio.shape[-1] / sample_rate
+
+        if duration > 30 or duration < 0.3:
+            return self.__getitem__((index + 1) % len(self.data))
+
+        audio_tensor = torch.from_numpy(audio).float()
+
+        if sample_rate != self.target_sample_rate:
+            resampler = torchaudio.transforms.Resample(sample_rate, self.target_sample_rate)
+            audio_tensor = resampler(audio_tensor)
+
+        audio_tensor = audio_tensor.unsqueeze(0)  # 't -> 1 t')
+
+        mel_spec = self.mel_spectrogram(audio_tensor)
+
+        mel_spec = mel_spec.squeeze(0)  # '1 d t -> d t'
+
+        text = row["sentence"]
 
         return dict(
             mel_spec=mel_spec,
