@@ -365,6 +365,13 @@ def load_dataset(
         train_dataset = HFDataset(
             load_dataset(f"{pre}/{pre}", split=f"train.{post}", cache_dir=str(files("f5_tts").joinpath("../../data"))),
         )
+    
+    elif dataset_type == "OurDataset":
+        # dataset_name = "Porameht/processed-voice-th-169k"
+        dataset = load_dataset(dataset_name, cache_dir=str(files("f5_tts").joinpath("../../data")))
+
+        train_dataset = OurDataset(dataset['train'])
+        # test_dataset = HFDataset(dataset['test'])
 
     return train_dataset
 
