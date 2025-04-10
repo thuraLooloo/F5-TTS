@@ -61,6 +61,12 @@ def parse_args():
         help="Path to custom tokenizer vocab file (only used if tokenizer = 'custom')",
     )
     parser.add_argument(
+        "--dataset_type",
+        type=str,
+        default=None,
+        help="type of dataset: CustomDataset or HFDataset or OurDataset"
+    )
+    parser.add_argument(
         "--log_samples",
         action="store_true",
         help="Log inferenced samples per ckpt save updates",
